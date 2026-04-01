@@ -591,3 +591,5 @@ for d in DRUG_DATA:
 print(f"Categories: {len(cats)}")
 for cat, count in sorted(cats.items(), key=lambda x: -x[1])[:15]:
     print(f"  {cat}: {count}")
+
+# Update 191 drugs - Total now 550
