@@ -124,8 +124,87 @@ with col_btn:
     st.write("")
     search_clicked = st.button("🔍 Search", use_container_width=True)
 
+# ============== SYNTHESIS DISPLAY FUNCTION ==============
+def show_drug_details(name, data):
+    """Display complete drug information including synthesis"""
+    st.markdown(f"""
+    <div class="drug-card">
+        <h3>💊 {name}</h3>
+        <p>
+            <span class="status-badge">{data.get('status', 'N/A')}</span>
+            <span class="category-badge">{data.get('category', 'N/A')}</span>
+            <span class="ref-badge">CAS: {data.get('cas', 'N/A')}</span>
+        </p>
+        <p><strong>Formula:</strong> {data.get('formula', 'N/A')} | <strong>MW:</strong> {data.get('mw', 'N/A')}</p>
+        <p><strong>Mechanism:</strong> {data.get('mechanism', 'N/A')}</p>
+        <p><strong>Therapeutic:</strong> {data.get('therapeutic', 'N/A')}</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Show synthesis if available
+    synth = data.get('synthesis', [])
+    if synth and len(synth) > 0:
+        st.markdown("### 🛤️ Complete Synthesis Route")
+        
+        for step in synth:
+            educts_list = step.get('educts', [])
+            educts_text = ", ".join([e.get('name', 'N/A') for e in educts_list])
+            educts_smiles = "\n".join([e.get('smiles', 'N/A') for e in educts_list])
+            
+            st.markdown(f"""
+            <div class="step-box">
+                <h4>Step {step['step']}: {step['type']}</h4>
+                <p><strong>Starting Materials:</strong> {educts_text}</p>
+                <p><strong>Conditions:</strong> {step.get('conditions', 'N/A')}</p>
+                <p><strong>Yield:</strong> {step.get('yield', 'N/A')}</p>
+                <p><strong>SMILES:</strong></p>
+                <code style="background:#f8f9fa;padding:0.5rem;display:block;word-break:break-all;border-radius:5px;">{educts_smiles}</code>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Show MW of starting materials
+            if educts_list:
+                mw_text = " | ".join([f"{e.get('name','N/A')}: MW={e.get('mw','N/A')}" for e in educts_list])
+                st.markdown(f"<p><small>💰 Starting Material MW: {mw_text}</small></p>", unsafe_allow_html=True)
+            
+            # References
+            refs = step.get('refs', [])
+            if refs:
+                st.markdown("<p><strong>References:</strong></p>", unsafe_allow_html=True)
+                for ref in refs:
+                    st.markdown(f"- <span class='ref-badge'>{ref.get('db', 'N/A')}</span> {ref.get('id', 'N/A')}")
+        
+        st.markdown("---")
+    else:
+        st.info("ℹ️ No verified synthesis route available for this drug yet.")
+    
+    # Show SMILES structure
+    smiles = data.get('smiles', '')
+    if smiles and smiles != 'N/A' and smiles != 'CCCC':
+        img_data = get_pubchem_image(smiles)
+        if img_data:
+            st.markdown("### 🔬 2D Structure")
+            col1, col2 = st.columns([1, 3])
+            with col1:
+                st.image(img_data, caption=f"Structure of {name}", width=250)
+            with col2:
+                st.markdown(f"""
+                <div style="padding:1rem;background:#f8f9fa;border-radius:10px;margin:0.5rem 0;">
+                    <p><strong>SMILES:</strong></p>
+                    <code style="word-break:break-all;">{smiles}</code>
+                </div>
+                """, unsafe_allow_html=True)
+
 # ============== SEARCH RESULTS ==============
-if search_clicked and query:
+# Handle selected drug from featured or search
+if 'selected_drug' in st.session_state and st.session_state.selected_drug:
+    name = st.session_state.selected_drug
+    if name in DRUG_DB:
+        show_drug_details(name, DRUG_DB[name])
+        if st.button("← Back to Search"):
+            st.session_state.selected_drug = None
+            st.rerun()
+elif search_clicked and query:
     results = []
     
     if search_type == "Drug Name":
@@ -147,59 +226,7 @@ if search_clicked and query:
         # Show first 20 results
         for name, data in results[:20]:
             with st.container():
-                st.markdown(f"""
-                <div class="drug-card">
-                    <h3>💊 {name}</h3>
-                    <p>
-                        <span class="status-badge">{data.get('status', 'N/A')}</span>
-                        <span class="category-badge">{data.get('category', 'N/A')}</span>
-                        <span class="ref-badge">CAS: {data.get('cas', 'N/A')}</span>
-                    </p>
-                    <p><strong>Formula:</strong> {data.get('formula', 'N/A')} | <strong>MW:</strong> {data.get('mw', 'N/A')}</p>
-                    <p><strong>Mechanism:</strong> {data.get('mechanism', 'N/A')}</p>
-                    <p><strong>Therapeutic:</strong> {data.get('therapeutic', 'N/A')}</p>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                # Show synthesis if available
-                if data.get('synthesis') and len(data.get('synthesis', [])) > 0:
-                    if st.button(f"🧪 View Synthesis Route for {name}", key=f"synth_{name}"):
-                        st.markdown("### 🛤️ Complete Synthesis Route")
-                        
-                        for step in data['synthesis']:
-                            st.markdown(f"""
-                            <div class="step-box">
-                                <h4>Step {step['step']}: {step['type']}</h4>
-                                <p><strong>Conditions:</strong> {step.get('conditions', 'N/A')}</p>
-                                <p><strong>Yield:</strong> {step.get('yield', 'N/A')}</p>
-                                <p><strong>Product SMILES:</strong></p>
-                                <code style="background:#f8f9fa;padding:0.5rem;display:block;word-break:break-all;">{step.get('educts', [{}])[0].get('smiles', 'N/A') if step.get('educts') else 'N/A'}</code>
-                            </div>
-                            """, unsafe_allow_html=True)
-                            
-                            # References
-                            refs = step.get('refs', [])
-                            if refs:
-                                st.markdown("<p><strong>References:</strong></p>", unsafe_allow_html=True)
-                                for ref in refs:
-                                    st.markdown(f"- <span class='ref-badge'>{ref.get('db', 'N/A')}</span> {ref.get('id', 'N/A')}")
-                
-                # Show SMILES
-                smiles = data.get('smiles', '')
-                if smiles and smiles != 'N/A':
-                    img_data = get_pubchem_image(smiles)
-                    if img_data:
-                        col1, col2 = st.columns([1, 3])
-                        with col1:
-                            st.image(img_data, caption=f"2D Structure of {name}", width=200)
-                        with col2:
-                            st.markdown(f"""
-                            <div style="padding:1rem;background:#f8f9fa;border-radius:10px;margin:0.5rem 0;">
-                                <p><strong>SMILES:</strong></p>
-                                <code style="word-break:break-all;">{smiles}</code>
-                            </div>
-                            """, unsafe_allow_html=True)
-                
+                show_drug_details(name, data)
                 st.markdown("---")
     else:
         st.error(f"No results found for '{query}'")
@@ -226,6 +253,7 @@ else:
                 
                 if st.button(f"View Details →", key=f"feat_{name}"):
                     st.session_state.selected_drug = name
+                    st.rerun()
     
     st.markdown("---")
     st.markdown("### 📋 Browse by Category")
@@ -237,7 +265,8 @@ else:
     for i, cat in enumerate(categories[:8]):
         with tabs[i]:
             drugs_in_cat = [(n, d) for n, d in DRUG_DB.items() if d.get('category') == cat]
-            st.markdown(f"**{len(drugs_in_cat)} drugs**")
+            synth_count = sum(1 for n, d in drugs_in_cat if d.get('synthesis'))
+            st.markdown(f"**{len(drugs_in_cat)} drugs** ({synth_count} with synthesis)")
             
             for name, data in drugs_in_cat[:20]:
                 with st.expander(f"💊 {name}"):
@@ -247,6 +276,11 @@ else:
                     st.markdown(f"**Status:** {data.get('status', 'N/A')}")
                     st.markdown(f"**Mechanism:** {data.get('mechanism', 'N/A')}")
                     st.markdown(f"**Therapeutic:** {data.get('therapeutic', 'N/A')}")
+                    if data.get('synthesis'):
+                        st.success("🧪 Has verified synthesis route!")
+                        if st.button(f"View Synthesis →", key=f"cat_synth_{name}"):
+                            st.session_state.selected_drug = name
+                            st.rerun()
 
 # ============== FOOTER ==============
 st.markdown("---")
